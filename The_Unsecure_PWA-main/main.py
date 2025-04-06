@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, session
-import userManagement as dbHandler
+import user_management as dbHandler
 import pyotp
 import pyqrcode
 import os
