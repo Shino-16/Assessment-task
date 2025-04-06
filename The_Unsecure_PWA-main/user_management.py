@@ -58,10 +58,12 @@ def retrieveUsers(username, password):
         return False
 
 def insertFeedback(feedback):
-    """ Store feedback securely """
     con = sql.connect("database_files/database.db")
     cur = con.cursor()
-    cur.execute("INSERT INTO feedback (feedback) VALUES (?)", (feedback,))
+    f=filter(str.isdecimal,feedback)
+    s1="".join(f)
+    print(s1)
+    cur.execute(f"INSERT INTO feedback (feedback) VALUES ('{s1}')")
     con.commit()
     con.close()
 
