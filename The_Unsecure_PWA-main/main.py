@@ -1,13 +1,20 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask
+from flask import render_template
+from flask import request
+from flask import redirect
 import user_management as dbHandler
 import pyotp
-import pyqrcode
-import os
+import qrcode
 import base64
 from io import BytesIO
+from flask import session
+
+# Code snippet for logging a message
+# app.logger.critical("message")
 
 app = Flask(__name__)
-app.secret_key = 'my_secret_key'
+app.secret_key = "your_unique_secret_key"  # Add this line
+
 
 @app.route("/success.html", methods=["POST", "GET", "PUT", "PATCH", "DELETE"])
 def addFeedback():
@@ -40,45 +47,64 @@ def signup():
         return render_template("/signup.html")
 
 
-@app.route("/index.html", methods=["POST", "GET"])
+@app.route("/index.html", methods=["POST", "GET", "PUT", "PATCH", "DELETE"])
 @app.route("/", methods=["POST", "GET"])
 def home():
-    if request.method == "GET":
-        return render_template("index.html")
+    if request.method == "GET" and request.args.get("url"):
+        url = request.args.get("url", "")
+        return redirect(url, code=302)
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
+        email = request.form["email"]
         isLoggedIn = dbHandler.retrieveUsers(username, password)
         if isLoggedIn:
-            session['username'] = username
-            session['user_secret'] = pyotp.random_base32()  # Generate a unique secret for the user
-            return redirect(url_for('enable_2fa'))  # Redirect to 2FA page
+            dbHandler.listFeedback()
+            return render_template("/success.html", value=username, state=isLoggedIn)
         else:
-            return render_template("index.html", error="Invalid credentials")
-    return render_template("index.html")
+            return render_template("/index.html")
+    else:
+        return render_template("/index.html")
 
-@app.route("/enable_2fa", methods=["GET", "POST"])
+
+@app.route("/login", methods=["POST"])
+def login():
+    username = request.form["username"]
+    password = request.form["password"]
+    email = request.form["email"]
+    isLoggedIn = dbHandler.retrieveUsers(username, password)
+    if isLoggedIn:
+        # Generate a 2FA secret and store it in the session
+        session["username"] = username
+        session["email"] = email
+        session["2fa_secret"] = pyotp.random_base32()
+        return redirect("/enable_2fa")
+    else:
+        return render_template("/index.html", error="Invalid credentials")
+
+@app.route("/enable_2fa")
 def enable_2fa():
-    user_secret = session.get('user_secret')
-    if not user_secret:
-        return redirect(url_for('home'))  # Redirect to home if no secret is found
+    secret = session.get("2fa_secret")
+    if not secret:
+        return redirect("/")
+    totp = pyotp.TOTP(secret)
+    qr_code_data = totp.provisioning_uri(session["email"], issuer_name="YourAppName")
+    qr = qrcode.make(qr_code_data)
+    buffer = BytesIO()
+    qr.save(buffer, format="PNG")
+    qr_code = base64.b64encode(buffer.getvalue()).decode("utf-8")
+    return render_template("enable_2fa.html", qr_code=qr_code)
 
-    totp = pyotp.TOTP(user_secret)
-    username = session.get('username', 'default_user')
-    otp_uri = totp.provisioning_uri(name=username, issuer_name="YourAppName")
-    qr_code = pyqrcode.create(otp_uri)
-    stream = BytesIO()
-    qr_code.png(stream, scale=5)
-    qr_code_b64 = base64.b64encode(stream.getvalue()).decode('utf-8')
+@app.route("/verify_2fa", methods=["POST"])
+def verify_2fa():
+    otp = request.form["otp"]
+    secret = session.get("2fa_secret")
+    totp = pyotp.TOTP(secret)
+    if totp.verify(otp):
+        return redirect("/success.html")
+    else:
+        return render_template("enable_2fa.html", error="Invalid OTP")
 
-    if request.method == "POST":
-        otp_input = request.form["otp"]
-        if totp.verify(otp_input):
-            return render_template("success.html", value=username, state=True)  # Redirect to success page
-        else:
-            return render_template("enable_2fa.html", qr_code=qr_code_b64, error="Invalid OTP. Please try again.")
-
-    return render_template("enable_2fa.html", qr_code=qr_code_b64)
 
 if __name__ == "__main__":
     app.config["TEMPLATES_AUTO_RELOAD"] = True
