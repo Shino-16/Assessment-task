@@ -2,8 +2,7 @@ import sqlite3 as sql
 import bcrypt
 import time
 import random
-import pyotp
-import pyqrcode
+
 from flask import Flask, request, redirect, url_for, render_template  # Added redirect and url_for
 
 app = Flask(__name__)
@@ -58,12 +57,10 @@ def retrieveUsers(username, password):
         return False
 
 def insertFeedback(feedback):
+    """ Store feedback securely """
     con = sql.connect("database_files/database.db")
     cur = con.cursor()
-    f=filter(str.isdecimal,feedback)
-    s1="".join(f)
-    print(s1)
-    cur.execute(f"INSERT INTO feedback (feedback) VALUES ('{s1}')")
+    cur.execute("INSERT INTO feedback (feedback) VALUES (?)", (feedback,))
     con.commit()
     con.close()
 
@@ -80,17 +77,3 @@ def listFeedback():
             f.write(f"{row[1]}\n")
             f.write("</p>\n")
 
-def home():
-    user_secret = pyotp.random_base32() #generate the one-time passcode
-    return redirect(url_for('enable_2fa')) #redirect to 2FA page
-
-@app.route('/index.html', methods=['POST', 'GET'])
-@app.route('/', methods=['POST', 'GET'])
-def handle_otp():
-    if request.method == 'POST':
-        otp = request.form.get('otp')
-        if otp:  # Validate OTP (you can add your OTP validation logic here)
-            return "2FA Enabled Successfully!"
-        else:
-            return "Invalid OTP. Please try again."
-    return render_template('index.html')  # Render the index.html template for GET requests
