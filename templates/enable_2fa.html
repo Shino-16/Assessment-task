@@ -1,0 +1,10 @@
+{% extends 'layout.html' %} {% block content %}
+<h1>Enable Two-Factor Authentication</h1>
+<p>Scan the QR code below with your authenticator app:</p>
+<img src="data:image/png;base64,{{ qr_code }}" alt="QR Code" />
+<p>After scanning, enter the code from your app to verify:</p>
+<form action="/verify_2fa" method="POST">
+  <input type="text" name="otp" placeholder="Enter OTP" required />
+  <button type="submit">Verify</button>
+</form>
+{% endblock %}
